@@ -24,8 +24,66 @@
 
 #include "model.h"
 
+static const double irootlen = 1. / (double) P4EST_ROOT_LEN;
+
 void
 p4est_model_destroy (p4est_model_t * model)
 {
+  if (model->destroy_promitives != NULL) {
+    model->destroy_promitives(model->primitives);
+  }
+}
 
+int
+p4est_model_intersect (p4est_t * p4est, p4est_topidx_t which_tree,
+                       p4est_quadrant_t * quadrant, p4est_locidx_t local_num,
+                       void *point)
+{
+  int                 result;
+  size_t              i;
+  double              coord[6];
+  p4est_qcoord_t      qh;
+  p4est_model_t  *model = (p4est_model_t *) p4est->user_pointer;
+
+  /* sanity checks */
+  P4EST_ASSERT (model != NULL);
+  P4EST_ASSERT (model->intersect != NULL);
+
+  /* retrieve object index and model */
+  P4EST_ASSERT (point != NULL);
+
+  /* provide rectangle coordinates */
+  qh = P4EST_QUADRANT_LEN (quadrant->level);
+  coord[0] = irootlen * quadrant->x;
+  coord[1] = irootlen * quadrant->y;
+#ifdef P4EST_TO_P8EST
+  coord[2] = irootlen * quadrant->z;
+#endif
+  coord[3] = irootlen * (quadrant->x + qh);
+  coord[4] = irootlen * (quadrant->y + qh);
+#ifdef P4EST_TO_P8EST
+  coord[5] = irootlen * (quadrant->z + qh);
+#endif
+
+  /* execute intersection test */
+  if ((result = model->intersect (which_tree, coord, point)) &&
+      local_num >= 0) {
+    /* set refinement indicator for a leaf quadrant */
+    quadrant->p.user_int = 1;
+  }
+  return result;
+}
+
+int
+p4est_model_refine (p4est_t * p4est, p4est_topidx_t which_tree,
+                    p4est_quadrant_t *quadrant)
+{
+  return quadrant->p.user_int;
+}
+
+void
+p4est_model_quad_init (p4est_t * p4est, p4est_topidx_t which_tree,
+                       p4est_quadrant_t *quadrant)
+{
+  quadrant->p.user_int = 0;
 }

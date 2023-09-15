@@ -34,7 +34,7 @@ typedef void        (*p4est_destroy_primitives_t) (void *primitives);
 /** Check intersection of a rectangle with an object. */
 typedef int         (*p4est_intersect_t) (p4est_topidx_t which_tree,
                                           const double coord[4],
-                                          size_t m, void *primitives);
+                                          void *primitive);
 
 /** General, application specific model data.
  * Creating the model as well as design and managing of primitives is
@@ -49,7 +49,7 @@ typedef struct p4est_model
   void               *primitives; /**< ptr to stored model's primitives */
 
   /** When not NULL, free whatever is stored in model::primitives. */
-  p4est_destroy_primitives_t destroy_data;
+  p4est_destroy_primitives_t destroy_promitives;
 
   /** Intersect a given rectangle with a model primitive. */
   p4est_intersect_t intersect;
@@ -84,7 +84,7 @@ int                 p4est_model_refine (p4est_t * p4est,
 /** Callback function prototype to initialize the quadrant's user data.
  * Its prototype completely corresponds to p4est_init_t type from p4est.h.
 */
-int                 p4est_model_quad_init (p4est_t * p4est,
+void                p4est_model_quad_init (p4est_t * p4est,
                                            p4est_topidx_t which_tree,
                                            p4est_quadrant_t *quadrant);
 
