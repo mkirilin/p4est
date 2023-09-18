@@ -38,6 +38,7 @@ typedef struct triangle
 }
 triangle_t;
 
+#if 0
 static int
 triangulation_is_vertex_inside_aabb (const double * aabb, const double * v)
 {
@@ -75,6 +76,7 @@ triangulation_setup_model (p4est_model_t ** m)
   model->geom = NULL;
   model->intersect = triangulation_intersect_model;
 }
+#endif
 
 static int
 usagerrf (sc_options_t * opt, const char *fmt, ...)

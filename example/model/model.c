@@ -40,7 +40,6 @@ p4est_model_intersect (p4est_t * p4est, p4est_topidx_t which_tree,
                        void *point)
 {
   int                 result;
-  size_t              i;
   double              coord[6];
   p4est_qcoord_t      qh;
   p4est_model_t  *model = (p4est_model_t *) p4est->user_pointer;
