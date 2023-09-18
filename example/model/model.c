@@ -29,8 +29,8 @@ static const double irootlen = 1. / (double) P4EST_ROOT_LEN;
 void
 p4est_model_destroy (p4est_model_t * model)
 {
-  if (model->destroy_promitives != NULL) {
-    model->destroy_promitives(model->primitives);
+  if (model->destroy_primitives != NULL) {
+    model->destroy_primitives(model->primitives);
   }
 }
 

@@ -49,7 +49,7 @@ typedef struct p4est_model
   void               *primitives; /**< ptr to stored model's primitives */
 
   /** When not NULL, free whatever is stored in model::primitives. */
-  p4est_destroy_primitives_t destroy_promitives;
+  p4est_destroy_primitives_t destroy_primitives;
 
   /** Intersect a given rectangle with a model primitive. */
   p4est_intersect_t intersect;
