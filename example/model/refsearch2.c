@@ -67,6 +67,205 @@ triangulation_intersect_model (p4est_topidx_t which_tree,
    }
 }
 
+/*
+ * Read a line from a file. Obtained from:
+ * http://stackoverflow.com/questions/314401/
+ * how-to-read-a-line-from-the-console-in-c/314422#314422
+ *
+ * Using this avoids a dependence on IEEE Std 1003.1-2008 (``POSIX.1'') for the
+ * getline function.
+ * 
+ * Copied from p4est_connectivity.c:
+ * p4est_connectivity_getline_upper (FILE * stream).
+ */
+static char        *
+triangulation_getline_upper (FILE * stream)
+{
+  char               *line = P4EST_ALLOC (char, 1024), *linep = line;
+  size_t              lenmax = 1024, len = lenmax;
+  int                 c;
+
+  if (line == NULL)
+    return NULL;
+
+  for (;;) {
+    c = fgetc (stream);
+    if (c == EOF && linep == line) {
+      P4EST_FREE (linep);
+      return NULL;
+    }
+    c = toupper (c);
+
+    if (--len == 0) {
+      char               *linen;
+
+      len = lenmax;
+      lenmax *= 2;
+
+      linen = P4EST_REALLOC (linep, char, lenmax);
+      if (linen == NULL) {
+        P4EST_FREE (linep);
+        return NULL;
+      }
+
+      line = linen + (line - linep);
+      linep = linen;
+    }
+    if ((*line++ = c) == '\n')
+      break;
+  }
+  *line = '\0';
+  return linep;
+}
+
+/** This function goes through the file fin that has .off (Object File Format).
+ * Object File Format (.off) files are used to represent the geometry of a
+ * model by specifying the polygons of the model's surface. The polygons can
+ * have any number of vertices.
+ * The .off files in the conform to the following standard. OFF files are all
+ * ASCII files beginning with the keyword OFF. The next line states the number
+ * of vertices, the number of faces, and the number of edges. The number of
+ * edges can be safely ignored.
+ *
+ * The vertices are listed with x, y, z coordinates, written one per line.
+ * After the list of vertices, the faces are listed, with one face per line.
+ *
+ * ****************************************************************************
+ * !!!Our model considers triangulated meshes only, so its all faces should be
+ * triangles!!!
+ * ****************************************************************************
+ *
+ * For each face, the number of vertices is specified, followed by indices into
+ * the list of vertices. See the examples below.
+ * Note that earlier versions of the model files had faces with -1 indices into
+ * the vertex list. That was due to an error in the conversion program and
+ * should be corrected now.
+ * OFF
+ * numVertices numFaces numEdges
+ * x y z
+ * x y z
+ *
+ * ... numVertices like above
+ * NVertices v1 v2 v3 ... vN
+ * MVertices v1 v2 v3 ... vM
+ * ... numFaces like above
+ *
+ * Note that vertices are numbered starting at 0 (not starting at 1).
+ * A simple example for a cube (that is not supported by this model):
+ *
+ * OFF
+ * 8 6 0
+ * -0.500000 -0.500000 0.500000
+ * 0.500000 -0.500000 0.500000
+ * -0.500000 0.500000 0.500000
+ * 0.500000 0.500000 0.500000
+ * -0.500000 0.500000 -0.500000
+ * 0.500000 0.500000 -0.500000
+ * -0.500000 -0.500000 -0.500000
+ * 0.500000 -0.500000 -0.500000
+ * 4 0 1 3 2
+ * 4 2 3 5 4
+ * 4 4 5 7 6
+ * 4 6 7 1 0
+ * 4 1 7 5 3
+ * 4 6 0 2 4
+*/
+static int
+triangulation_read_off_file_stream (p4est_model_t * m, FILE * fin)
+{
+  char * line;
+  int                 lines_read = 0, v = 0;
+  int retval;
+  size_t num_vertices, num_edges;
+  double * vertices;
+  double x, y, z;
+  double max_abs_crd = -1., min_crd = DBL_MAX;
+
+  for (;;) {
+    line = triangulation_getline_upper (fin);
+
+    if (line == NULL) {
+      break;
+    }
+
+    ++lines_read;
+
+    /* check for file format */
+    if (lines_read == 1) {
+      if (!strstr (line, "OFF")) {
+        P4EST_LERROR ("Wrong file format to read");
+        P4EST_FREE (line);
+        return 0;
+      }
+      continue;
+    }
+
+    /* check for number of vertices and faces in the object to read */
+    if (lines_read == 2) {
+      retval
+        = sscanf (line, "%lu, %lu, %lu", &num_vertices, &m->num_prim, &num_edges);
+
+      if (retval != 3) {
+        P4EST_LERROR ("Wrong file format to read");
+        P4EST_FREE (line);
+        return 0;
+      }
+      if (num_vertices < 3) {
+        P4EST_LERROR ("Not enough vertices to build a triangle");
+        P4EST_FREE (line);
+        return 0;
+      }
+      if (m->num_prim == 0) {
+        P4EST_LERROR ("No primitives in the file");
+        P4EST_FREE (line);
+        return 0;
+      }
+
+      /* allocate memory for vertices and face (triangles (primitives)) */
+      vertices = P4EST_ALLOC (double, 3 * num_vertices);
+      m->primitives = P4EST_ALLOC (triangle_t, m->num_prim);
+
+      continue;
+    }
+
+    if (v < num_vertices) {
+      retval = sscanf (line, "%lf, %lf, %lf", &x, &y, &z);
+      vertices[3 * v + 0] = x;
+      vertices[3 * v + 1] = y;
+      vertices[3 * v + 2] = z;
+      max_abs_crd
+        = SC_MAX (max_abs_crd, SC_MAX (SC_MAX (fabs (x), fabs (y)), fabs (z)));
+      min_crd = SC_MIN (min_crd, SC_MIN (SC_MIN (x, y), z));
+      ++v;
+
+      if (v == num_vertices) {
+        max_abs_crd -= min_crd;
+      }
+
+      continue;
+    } else {
+      /* all vertices are read, now read faces */
+
+    }
+  }
+  return 1;
+}
+
+static int
+triangulation_read_off_file (p4est_model_t * m, const char * filename)
+{
+  FILE *fin = NULL;
+
+  P4EST_GLOBAL_PRODUCTIONF ("Reading connectivity from %s\n", filename);
+
+  fin = fopen (filename, "rb");
+  if (fin == NULL) {
+    P4EST_LERRORF ("Failed to open %s\n", filename);
+    return 0;
+  }
+
+}
+
 static void
 triangulation_setup_model (p4est_model_t ** m)
 {
