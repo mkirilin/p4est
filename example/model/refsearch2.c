@@ -326,17 +326,29 @@ triangulation_read_off_file (p4est_model_t * m, const char * filename)
 }
 
 static void
+triangulation_desroy_primitives (void * primitives)
+{
+  P4EST_FREE (primitives);
+}
+
+static int
 triangulation_setup_model (p4est_model_t ** m, const char * filename)
 {
   p4est_model_t  *model = P4EST_ALLOC_ZERO (p4est_model_t, 1);
   model->output_prefix = "triangulation";
   model->conn = p4est_connectivity_new_unitsquare ();
+  if (model->conn == NULL) {
+    P4EST_LERROR ("Failed to create a model's connectivity");
+    return 0;
+  }
   model->geom = NULL;
   model->intersect = triangulation_intersect_model;
-  if (!triangulation_read_off_file (m, filename)) {
+  if (!triangulation_read_off_file (*m, filename)) {
     P4EST_LERRORF ("Failed to read a valid model from %s\n", filename);
-    sc_abort ();
+    return 0;
   }
+  model->destroy_primitives = triangulation_desroy_primitives;
+  return 1;
 }
 /* #endif */
 
@@ -369,6 +381,8 @@ main (int argc, char **argv)
   int                 mpiret;
   int                 ue, fa;
   sc_options_t       *opt;
+  p4est_model_t * model;
+  const char * filename;
 
   /* initialize MPI */
   mpiret = sc_MPI_Init (&argc, &argv);
@@ -385,6 +399,8 @@ main (int argc, char **argv)
   opt = sc_options_new (argv[0]);
   sc_options_add_int (opt, 'L', "maxlevel", &max_ref_level, P4EST_QMAXLEVEL,
                       "Maximum refinement level");
+  sc_options_add_string (opt, 'F', "filename", &filename, "model.off",
+                        "Input file in .off format");
 
     /* proceed in run-once loop for cleaner error checking */
   ue = 0;
@@ -408,6 +424,14 @@ main (int argc, char **argv)
   if (ue) {
     sc_options_print_usage (p4est_package_id, SC_LP_ERROR, opt, NULL);
   }
+
+  /* setup appplication model */
+  if (!ue && !triangulation_setup_model (&model, filename)) {
+    P4EST_ASSERT (model == NULL);
+    ue = usagerr (opt, "model-specific initialization error");
+  }
+
+  
 
   return 0;
 }
