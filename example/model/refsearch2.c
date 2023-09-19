@@ -300,6 +300,7 @@ triangulation_read_off_file_stream (p4est_model_t * m, FILE * fin)
 static int
 triangulation_read_off_file (p4est_model_t * m, const char * filename)
 {
+  int retval = 0;
   FILE *fin = NULL;
 
   P4EST_GLOBAL_PRODUCTIONF ("Reading connectivity from %s\n", filename);
@@ -310,16 +311,32 @@ triangulation_read_off_file (p4est_model_t * m, const char * filename)
     return 0;
   }
 
+  if (!triangulation_read_off_file_stream (m, fin)){
+    P4EST_LERRORF ("Failed to read %s: pass 1\n", filename);
+    return 0;
+  }
+
+  retval = fclose (fin);
+  if (retval != 0) {
+    P4EST_LERRORF ("Failed to close %s\n", filename);
+    return 0;
+  }
+
+  return 1;
 }
 
 static void
-triangulation_setup_model (p4est_model_t ** m)
+triangulation_setup_model (p4est_model_t ** m, const char * filename)
 {
   p4est_model_t  *model = P4EST_ALLOC_ZERO (p4est_model_t, 1);
   model->output_prefix = "triangulation";
   model->conn = p4est_connectivity_new_unitsquare ();
   model->geom = NULL;
   model->intersect = triangulation_intersect_model;
+  if (!triangulation_read_off_file (m, filename)) {
+    P4EST_LERRORF ("Failed to read a valid model from %s\n", filename);
+    sc_abort ();
+  }
 }
 /* #endif */
 
