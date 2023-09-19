@@ -38,7 +38,7 @@ typedef struct triangle
 }
 triangle_t;
 
-#if 0
+/* #if 0 */
 static int
 triangulation_is_vertex_inside_aabb (const double * aabb, const double * v)
 {
@@ -174,12 +174,15 @@ static int
 triangulation_read_off_file_stream (p4est_model_t * m, FILE * fin)
 {
   char * line;
-  int                 lines_read = 0, v = 0;
+  int                 lines_read = 0, v = 0, f = 0;
   int retval;
-  size_t num_vertices, num_edges;
+  size_t num_vertices, num_edges, v2f, vid[3];
+  triangle_t * faces;
   double * vertices;
   double x, y, z;
-  double max_abs_crd = -1., min_crd = DBL_MAX;
+  double min_x, min_y, min_z;
+  double max_x, max_y, max_z;
+  double axis_scale = 1.;
 
   for (;;) {
     line = triangulation_getline_upper (fin);
@@ -223,30 +226,73 @@ triangulation_read_off_file_stream (p4est_model_t * m, FILE * fin)
 
       /* allocate memory for vertices and face (triangles (primitives)) */
       vertices = P4EST_ALLOC (double, 3 * num_vertices);
-      m->primitives = P4EST_ALLOC (triangle_t, m->num_prim);
+      faces = m->primitives = P4EST_ALLOC (triangle_t, m->num_prim);
 
       continue;
     }
 
     if (v < num_vertices) {
+      /* read vertices */
       retval = sscanf (line, "%lf, %lf, %lf", &x, &y, &z);
+      if (retval != 3) {
+        P4EST_LERROR ("Premature end of file");
+        P4EST_FREE (line);
+        return 0;
+      }
+      if (v == 0) {
+        min_x = max_x = x;
+        min_y = max_y = y;
+        min_z = max_z = z;
+      }
+      min_x = SC_MIN (min_x, x);
+      min_y = SC_MIN (min_y, y);
+      min_z = SC_MIN (min_z, z);
+
+      min_x = SC_MAX (max_x, x);
+      min_y = SC_MAX (max_y, y);
+      min_z = SC_MAX (max_z, z);
+
       vertices[3 * v + 0] = x;
       vertices[3 * v + 1] = y;
       vertices[3 * v + 2] = z;
-      max_abs_crd
-        = SC_MAX (max_abs_crd, SC_MAX (SC_MAX (fabs (x), fabs (y)), fabs (z)));
-      min_crd = SC_MIN (min_crd, SC_MIN (SC_MIN (x, y), z));
+
       ++v;
 
       if (v == num_vertices) {
-        max_abs_crd -= min_crd;
+        axis_scale
+          = 1. / SC_MAX (SC_MAX (max_x - min_x, max_y - min_y), max_z - min_z);
       }
 
       continue;
     } else {
       /* all vertices are read, now read faces */
+      retval
+        = sscanf (line, "%lu, %lu, %lu, %lu", &v2f, &vid[0], &vid[1], &vid[2]);
+      if (retval != 4) {
+        P4EST_LERROR ("Premature end of file");
+        P4EST_FREE (line);
+        return 0;
+      }
+      if (v2f != 3) {
+        P4EST_LERROR ("Unsupported face format in file");
+        P4EST_FREE (line);
+        return 0;
+      }
+      faces[f].v0[0] = (vertices[3 * vid[0] + 0] - min_x) * axis_scale;
+      faces[f].v0[1] = (vertices[3 * vid[0] + 1] - min_y) * axis_scale;
+      faces[f].v0[2] = (vertices[3 * vid[0] + 2] - min_z) * axis_scale;
 
+      faces[f].v1[0] = (vertices[3 * vid[1] + 0] - min_x) * axis_scale;
+      faces[f].v1[1] = (vertices[3 * vid[1] + 1] - min_y) * axis_scale;
+      faces[f].v1[2] = (vertices[3 * vid[1] + 2] - min_z) * axis_scale;
+
+      faces[f].v2[0] = (vertices[3 * vid[2] + 0] - min_x) * axis_scale;
+      faces[f].v2[1] = (vertices[3 * vid[2] + 1] - min_y) * axis_scale;
+      faces[f].v2[2] = (vertices[3 * vid[2] + 2] - min_z) * axis_scale;
+
+      ++f;
     }
+    P4EST_FREE (line);
   }
   return 1;
 }
@@ -275,7 +321,7 @@ triangulation_setup_model (p4est_model_t ** m)
   model->geom = NULL;
   model->intersect = triangulation_intersect_model;
 }
-#endif
+/* #endif */
 
 static int
 usagerrf (sc_options_t * opt, const char *fmt, ...)
