@@ -174,7 +174,8 @@ static int
 triangulation_read_off_file_stream (p4est_model_t * m, FILE * fin)
 {
   char * line;
-  int                 lines_read = 0, v = 0, f = 0;
+  int                 lines_read = 0;
+  size_t v = 0, f = 0;
   int retval;
   size_t num_vertices, num_edges, v2f, vid[3];
   triangle_t * faces;
@@ -206,7 +207,7 @@ triangulation_read_off_file_stream (p4est_model_t * m, FILE * fin)
     /* check for number of vertices and faces in the object to read */
     if (lines_read == 2) {
       retval
-        = sscanf (line, "%lu, %lu, %lu", &num_vertices, &m->num_prim, &num_edges);
+        = sscanf (line, "%lu %lu %lu", &num_vertices, &m->num_prim, &num_edges);
 
       if (retval != 3) {
         P4EST_LERROR ("Wrong file format to read");
@@ -226,14 +227,15 @@ triangulation_read_off_file_stream (p4est_model_t * m, FILE * fin)
 
       /* allocate memory for vertices and face (triangles (primitives)) */
       vertices = P4EST_ALLOC (double, 3 * num_vertices);
-      faces = m->primitives = P4EST_ALLOC (triangle_t, m->num_prim);
+      faces = P4EST_ALLOC (triangle_t, m->num_prim);
+      m->primitives = (void *) faces;
 
       continue;
     }
 
     if (v < num_vertices) {
       /* read vertices */
-      retval = sscanf (line, "%lf, %lf, %lf", &x, &y, &z);
+      retval = sscanf (line, "%lf %lf %lf", &x, &y, &z);
       if (retval != 3) {
         P4EST_LERROR ("Premature end of file");
         P4EST_FREE (line);
@@ -248,9 +250,9 @@ triangulation_read_off_file_stream (p4est_model_t * m, FILE * fin)
       min_y = SC_MIN (min_y, y);
       min_z = SC_MIN (min_z, z);
 
-      min_x = SC_MAX (max_x, x);
-      min_y = SC_MAX (max_y, y);
-      min_z = SC_MAX (max_z, z);
+      max_x = SC_MAX (max_x, x);
+      max_y = SC_MAX (max_y, y);
+      max_z = SC_MAX (max_z, z);
 
       vertices[3 * v + 0] = x;
       vertices[3 * v + 1] = y;
@@ -267,7 +269,7 @@ triangulation_read_off_file_stream (p4est_model_t * m, FILE * fin)
     } else {
       /* all vertices are read, now read faces */
       retval
-        = sscanf (line, "%lu, %lu, %lu, %lu", &v2f, &vid[0], &vid[1], &vid[2]);
+        = sscanf (line, "%lu %lu %lu %lu", &v2f, &vid[0], &vid[1], &vid[2]);
       if (retval != 4) {
         P4EST_LERROR ("Premature end of file");
         P4EST_FREE (line);
@@ -343,11 +345,12 @@ triangulation_setup_model (p4est_model_t ** m, const char * filename)
   }
   model->geom = NULL;
   model->intersect = triangulation_intersect_model;
-  if (!triangulation_read_off_file (*m, filename)) {
+  if (!triangulation_read_off_file (model, filename)) {
     P4EST_LERRORF ("Failed to read a valid model from %s\n", filename);
     return 0;
   }
   model->destroy_primitives = triangulation_desroy_primitives;
+  *m = model;
   return 1;
 }
 /* #endif */
@@ -430,8 +433,6 @@ main (int argc, char **argv)
     P4EST_ASSERT (model == NULL);
     ue = usagerr (opt, "model-specific initialization error");
   }
-
-  
 
   return 0;
 }
