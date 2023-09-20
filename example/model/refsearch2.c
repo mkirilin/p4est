@@ -202,6 +202,7 @@ triangulation_read_off_file_stream (p4est_model_t * m, FILE * fin)
         P4EST_FREE (line);
         return 0;
       }
+      P4EST_FREE (line);
       continue;
     }
 
@@ -231,6 +232,7 @@ triangulation_read_off_file_stream (p4est_model_t * m, FILE * fin)
       faces = P4EST_ALLOC (triangle_t, m->num_prim);
       m->primitives = (void *) faces;
 
+      P4EST_FREE (line);
       continue;
     }
 
@@ -265,7 +267,7 @@ triangulation_read_off_file_stream (p4est_model_t * m, FILE * fin)
         axis_scale
           = 1. / SC_MAX (SC_MAX (max_x - min_x, max_y - min_y), max_z - min_z);
       }
-
+      P4EST_FREE (line);
       continue;
     } else {
       /* all vertices are read, now read faces */
@@ -296,6 +298,9 @@ triangulation_read_off_file_stream (p4est_model_t * m, FILE * fin)
       ++f;
     }
     P4EST_FREE (line);
+  }
+  if (lines_read >= 2) {
+    P4EST_FREE (vertices);
   }
   return 1;
 }
@@ -484,6 +489,13 @@ main (int argc, char **argv)
   if (!ue) {
     P4EST_ASSERT (model != NULL);
     run_program (mpicomm, model);
+  }
+
+  /* cleanup application model */
+  if (model != NULL) {
+    p4est_connectivity_destroy (model->conn);
+    p4est_model_destroy (model);
+    P4EST_FREE (model);
   }
 
   /* deinit main program */
