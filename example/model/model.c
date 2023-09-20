@@ -41,7 +41,9 @@ p4est_model_intersect (p4est_t * p4est, p4est_topidx_t which_tree,
 {
   int                 result;
   double              coord[6];
+#ifdef P4EST_ENABLE_DEBUG
   size_t              p;
+#endif
   p4est_qcoord_t      qh;
   p4est_model_t  *model = (p4est_model_t *) p4est->user_pointer;
 
@@ -51,7 +53,9 @@ p4est_model_intersect (p4est_t * p4est, p4est_topidx_t which_tree,
 
   /* retrieve object index and model */
   P4EST_ASSERT (point != NULL);
+#ifdef P4EST_ENABLE_DEBUG
   p = *(size_t *) point;
+#endif
   P4EST_ASSERT (p < model->num_prim);
 
   /* provide rectangle coordinates */

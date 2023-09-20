@@ -27,6 +27,7 @@
 #include <p8est_vtk.h>
 #include <sc_options.h>
 #include "model.h"
+#include "tribox.h"
 
 static int max_ref_level = 1;
 
@@ -38,35 +39,56 @@ typedef struct triangle
 }
 triangle_t;
 
-static int
+/*static int
 triangulation_is_vertex_inside_aabb (const double * aabb, const double * v)
 {
   return ((v[0] >= aabb[0] && v[0] <= aabb[3]) &&
           (v[1] >= aabb[1] && v[1] <= aabb[4]) &&
           (v[2] >= aabb[2] && v[2] <= aabb[5]));
-}
+}*/
 
 static int
 triangulation_intersect_model (p4est_topidx_t which_tree,
                                const double aabb[6], void * model,
                                void *point)
 {
+  float boxcenter[3], boxhalfsize[3], triverts[3][3];
+
   triangle_t * t = (triangle_t *) ((p4est_model_t *) model)->primitives;
   size_t p = *(size_t *) point;
 
-  int is_v0_in = triangulation_is_vertex_inside_aabb (aabb, t[p].v0);
+  /*int is_v0_in = triangulation_is_vertex_inside_aabb (aabb, t[p].v0);
   int is_v1_in = triangulation_is_vertex_inside_aabb (aabb, t[p].v1);
   int is_v2_in = triangulation_is_vertex_inside_aabb (aabb, t[p].v2);
 
- /* if ((is_v0_in && is_v1_in && is_v2_in)
-   || (!is_v0_in && !is_v1_in && !is_v2_in))*/
-   if (is_v0_in || is_v1_in || is_v2_in)
-   {
-     return 1;
-   }
-   else {
-     return 0;
-   }
+  if (is_v0_in || is_v1_in || is_v2_in)
+  {
+    return 1;
+  }
+  else {
+    return 0;
+  }*/
+  boxcenter[0] = (aabb[3] + aabb[0]) * 0.5;
+  boxcenter[1] = (aabb[4] + aabb[1]) * 0.5;
+  boxcenter[2] = (aabb[5] + aabb[2]) * 0.5;
+
+  boxhalfsize[0] = (aabb[3] - aabb[0]) * 0.5;
+  boxhalfsize[1] = (aabb[4] - aabb[1]) * 0.5;
+  boxhalfsize[2] = (aabb[5] - aabb[2]) * 0.5;
+
+  triverts[0][0] = t[p].v0[0];
+  triverts[0][1] = t[p].v0[1];
+  triverts[0][2] = t[p].v0[2];
+
+  triverts[1][0] = t[p].v1[0];
+  triverts[1][1] = t[p].v1[1];
+  triverts[1][2] = t[p].v1[2];
+
+  triverts[2][0] = t[p].v2[0];
+  triverts[2][1] = t[p].v2[1];
+  triverts[2][2] = t[p].v2[2];
+
+  return triBoxOverlap (boxcenter, boxhalfsize, triverts);
 }
 
 /*
@@ -180,11 +202,11 @@ triangulation_read_off_file_stream (p4est_model_t * m, FILE * fin)
   size_t v = 0, f = 0;
   int retval;
   size_t num_vertices, num_edges, v2f, vid[3];
-  triangle_t * faces;
-  double * vertices;
-  double x, y, z;
-  double min_x, min_y, min_z;
-  double max_x, max_y, max_z;
+  triangle_t * faces = NULL;
+  double * vertices= NULL;
+  double x = 0, y = 0, z = 0;
+  double min_x = 0., min_y = 0., min_z = 0.;
+  double max_x = 0., max_y = 0., max_z = 0.;
   double axis_scale = 1.;
 
   for (;;) {
@@ -362,19 +384,19 @@ triangulation_setup_model (p4est_model_t ** m, const char * filename)
 }
 
 void
-run_program (sc_MPI_Comm mpicomm, p4est_model_t * model)
+run_program (sc_MPI_Comm * mpicomm, p4est_model_t * model)
 {
   size_t              zz;
   char                filename[BUFSIZ];
   sc_array_t         *primitives;
   p4est_t            *p4est;
   const size_t        quad_data_size = 0;
-  const int           start_level = 0;
+  const int           start_level = 3;
   int                 level;
 
   /* create mesh */
   P4EST_GLOBAL_PRODUCTION ("Create initial mesh\n");
-  p4est = p4est_new_ext (mpicomm, model->conn, 0, start_level, 1,
+  p4est = p4est_new_ext (*mpicomm, model->conn, 0, start_level, 1,
                          quad_data_size, p4est_model_quad_init, model);
 
   /* run mesh refinement based on data */
@@ -443,7 +465,7 @@ main (int argc, char **argv)
   int                 mpiret;
   int                 ue, fa;
   sc_options_t       *opt;
-  p4est_model_t * model;
+  p4est_model_t * model = NULL;
   const char * filename;
 
   /* initialize MPI */
@@ -496,7 +518,7 @@ main (int argc, char **argv)
   /* execute application model */
   if (!ue) {
     P4EST_ASSERT (model != NULL);
-    run_program (mpicomm, model);
+    run_program (&mpicomm, model);
   }
 
   /* cleanup application model */
