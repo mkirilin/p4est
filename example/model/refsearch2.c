@@ -378,7 +378,7 @@ run_program (sc_MPI_Comm mpicomm, p4est_model_t * model)
   for (zz = 0; zz < model->num_prim; ++zz) {
     *(size_t *) sc_array_index (primitives, zz) = zz;
   }
-  for (level = start_level; level < max_ref_level; ++level) {
+  for (level = start_level; level <= max_ref_level; ++level) {
     P4EST_GLOBAL_PRODUCTIONF ("Into refinement iteration %d\n", level);
     snprintf (filename, BUFSIZ, "p4est_gmt_%s_%02d",
               model->output_prefix, level);
@@ -394,6 +394,8 @@ run_program (sc_MPI_Comm mpicomm, p4est_model_t * model)
     p4est_partition (p4est, 0, NULL);
   }
   sc_array_destroy (primitives);
+
+  p4est_vtk_write_file (p4est, model->geom, filename);
 
   /* cleanup */
   p4est_destroy (p4est);
@@ -484,5 +486,10 @@ main (int argc, char **argv)
     run_program (mpicomm, model);
   }
 
-  return 0;
+  /* deinit main program */
+  sc_options_destroy (opt);
+  sc_finalize ();
+  mpiret = sc_MPI_Finalize ();
+  SC_CHECK_MPI (mpiret);
+  return ue ? EXIT_FAILURE : EXIT_SUCCESS;
 }
