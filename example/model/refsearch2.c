@@ -28,7 +28,7 @@
 #include <sc_options.h>
 #include "model.h"
 
-static int max_ref_level = 3;
+static int max_ref_level = 1;
 
 typedef struct triangle
 {
@@ -58,13 +58,14 @@ triangulation_intersect_model (p4est_topidx_t which_tree,
   int is_v1_in = triangulation_is_vertex_inside_aabb (aabb, t[p].v1);
   int is_v2_in = triangulation_is_vertex_inside_aabb (aabb, t[p].v2);
 
-  if ((is_v0_in && is_v1_in && is_v2_in)
-   || (!is_v0_in && !is_v1_in && !is_v2_in))
+ /* if ((is_v0_in && is_v1_in && is_v2_in)
+   || (!is_v0_in && !is_v1_in && !is_v2_in))*/
+   if (is_v0_in || is_v1_in || is_v2_in)
    {
-     return 0;
+     return 1;
    }
    else {
-     return 1;
+     return 0;
    }
 }
 
@@ -368,7 +369,7 @@ run_program (sc_MPI_Comm mpicomm, p4est_model_t * model)
   sc_array_t         *primitives;
   p4est_t            *p4est;
   const size_t        quad_data_size = 0;
-  const int           start_level = 2;
+  const int           start_level = 0;
   int                 level;
 
   /* create mesh */
@@ -383,20 +384,27 @@ run_program (sc_MPI_Comm mpicomm, p4est_model_t * model)
   for (zz = 0; zz < model->num_prim; ++zz) {
     *(size_t *) sc_array_index (primitives, zz) = zz;
   }
-  for (level = start_level; level <= max_ref_level; ++level) {
+  snprintf (filename, BUFSIZ, "p4est_%s_%02d",
+            model->output_prefix, start_level);
+  p4est_vtk_write_file (p4est, model->geom, filename);
+  for (level = start_level; level < max_ref_level; ++level) {
     P4EST_GLOBAL_PRODUCTIONF ("Into refinement iteration %d\n", level);
-    snprintf (filename, BUFSIZ, "p4est_gmt_%s_%02d",
-              model->output_prefix, level);
-    p4est_vtk_write_file (p4est, model->geom, filename);
 
     P4EST_GLOBAL_PRODUCTION ("Run object search\n");
-    p4est_search_reorder
-      (p4est, 1, NULL, NULL, NULL, p4est_model_intersect, primitives);
+    p4est_search_local (p4est, 0, NULL, p4est_model_intersect, primitives);
+    /*p4est_search_reorder
+      (p4est, 1, NULL, NULL, NULL, p4est_model_intersect, primitives);*/
 
     P4EST_GLOBAL_PRODUCTION ("Run mesh refinement\n");
+
     p4est_refine (p4est, 0, p4est_model_refine, p4est_model_quad_init);
+    /*p4est_refine_ext
+      (p4est, 0, -1, p4est_model_refine, p4est_model_quad_init, NULL);*/
 
     p4est_partition (p4est, 0, NULL);
+    snprintf (filename, BUFSIZ, "p4est_%s_%02d",
+              model->output_prefix, level + 1);
+    p4est_vtk_write_file (p4est, model->geom, filename);
   }
   sc_array_destroy (primitives);
 

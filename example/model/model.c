@@ -58,12 +58,12 @@ p4est_model_intersect (p4est_t * p4est, p4est_topidx_t which_tree,
   qh = P4EST_QUADRANT_LEN (quadrant->level);
   coord[0] = irootlen * quadrant->x;
   coord[1] = irootlen * quadrant->y;
-#ifdef P4EST_TO_P8EST
+#ifdef P4_TO_P8
   coord[2] = irootlen * quadrant->z;
 #endif
   coord[3] = irootlen * (quadrant->x + qh);
   coord[4] = irootlen * (quadrant->y + qh);
-#ifdef P4EST_TO_P8EST
+#ifdef P4_TO_P8
   coord[5] = irootlen * (quadrant->z + qh);
 #endif
 
