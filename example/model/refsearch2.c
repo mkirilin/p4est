@@ -22,9 +22,9 @@
   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
 */
 
-#include <p4est_extended.h>
-#include <p4est_search.h>
-#include <p4est_vtk.h>
+#include <p8est_extended.h>
+#include <p8est_search.h>
+#include <p8est_vtk.h>
 #include <sc_options.h>
 #include "model.h"
 
@@ -38,7 +38,6 @@ typedef struct triangle
 }
 triangle_t;
 
-/* #if 0 */
 static int
 triangulation_is_vertex_inside_aabb (const double * aabb, const double * v)
 {
@@ -49,13 +48,15 @@ triangulation_is_vertex_inside_aabb (const double * aabb, const double * v)
 
 static int
 triangulation_intersect_model (p4est_topidx_t which_tree,
-                               const double aabb[6], void *primitive)
+                               const double aabb[6], void * model,
+                               void *point)
 {
-  triangle_t * t = (triangle_t *) primitive;
+  triangle_t * t = (triangle_t *) ((p4est_model_t *) model)->primitives;
+  size_t p = *(size_t *) point;
 
-  int is_v0_in = triangulation_is_vertex_inside_aabb (aabb, t->v0);
-  int is_v1_in = triangulation_is_vertex_inside_aabb (aabb, t->v1);
-  int is_v2_in = triangulation_is_vertex_inside_aabb (aabb, t->v2);
+  int is_v0_in = triangulation_is_vertex_inside_aabb (aabb, t[p].v0);
+  int is_v1_in = triangulation_is_vertex_inside_aabb (aabb, t[p].v1);
+  int is_v2_in = triangulation_is_vertex_inside_aabb (aabb, t[p].v2);
 
   if ((is_v0_in && is_v1_in && is_v2_in)
    || (!is_v0_in && !is_v1_in && !is_v2_in))
@@ -338,7 +339,7 @@ triangulation_setup_model (p4est_model_t ** m, const char * filename)
 {
   p4est_model_t  *model = P4EST_ALLOC_ZERO (p4est_model_t, 1);
   model->output_prefix = "triangulation";
-  model->conn = p4est_connectivity_new_unitsquare ();
+  model->conn = p8est_connectivity_new_unitcube ();
   if (model->conn == NULL) {
     P4EST_LERROR ("Failed to create a model's connectivity");
     return 0;
@@ -353,7 +354,50 @@ triangulation_setup_model (p4est_model_t ** m, const char * filename)
   *m = model;
   return 1;
 }
-/* #endif */
+
+void
+run_program (sc_MPI_Comm mpicomm, p4est_model_t * model)
+{
+  size_t              zz;
+  char                filename[BUFSIZ];
+  sc_array_t         *primitives;
+  p4est_t            *p4est;
+  const size_t        quad_data_size = 0;
+  const int           start_level = 2;
+  int                 level;
+
+  /* create mesh */
+  P4EST_GLOBAL_PRODUCTION ("Create initial mesh\n");
+  p4est = p4est_new_ext (mpicomm, model->conn, 0, start_level, 1,
+                         quad_data_size, p4est_model_quad_init, model);
+
+  /* run mesh refinement based on data */
+  P4EST_GLOBAL_PRODUCTIONF ("Setting up %lld search objects\n",
+                            (long long) model->num_prim);
+  primitives = sc_array_new_count (sizeof (triangle_t), model->num_prim);
+  for (zz = 0; zz < model->num_prim; ++zz) {
+    *(size_t *) sc_array_index (primitives, zz) = zz;
+  }
+  for (level = start_level; level < max_ref_level; ++level) {
+    P4EST_GLOBAL_PRODUCTIONF ("Into refinement iteration %d\n", level);
+    snprintf (filename, BUFSIZ, "p4est_gmt_%s_%02d",
+              model->output_prefix, level);
+    p4est_vtk_write_file (p4est, model->geom, filename);
+
+    P4EST_GLOBAL_PRODUCTION ("Run object search\n");
+    p4est_search_reorder
+      (p4est, 1, NULL, NULL, NULL, p4est_model_intersect, primitives);
+
+    P4EST_GLOBAL_PRODUCTION ("Run mesh refinement\n");
+    p4est_refine (p4est, 0, p4est_model_refine, p4est_model_quad_init);
+
+    p4est_partition (p4est, 0, NULL);
+  }
+  sc_array_destroy (primitives);
+
+  /* cleanup */
+  p4est_destroy (p4est);
+}
 
 static int
 usagerrf (sc_options_t * opt, const char *fmt, ...)
@@ -432,6 +476,12 @@ main (int argc, char **argv)
   if (!ue && !triangulation_setup_model (&model, filename)) {
     P4EST_ASSERT (model == NULL);
     ue = usagerr (opt, "model-specific initialization error");
+  }
+
+  /* execute application model */
+  if (!ue) {
+    P4EST_ASSERT (model != NULL);
+    run_program (mpicomm, model);
   }
 
   return 0;

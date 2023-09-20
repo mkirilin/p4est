@@ -4,6 +4,9 @@
 # included non-recursively from toplevel directory
 
 if P4EST_ENABLE_BUILD_2D
+endif
+
+if P4EST_ENABLE_BUILD_3D
 bin_PROGRAMS += example/model/p4est_refsearch
 
 example_model_p4est_refsearch_SOURCES = \
@@ -13,7 +16,4 @@ example_model_p4est_refsearch_SOURCES = \
 
 LINT_CSOURCES += \
         $(example_model_p4est_refsearch_SOURCES)
-endif
-
-if P4EST_ENABLE_BUILD_3D
 endif

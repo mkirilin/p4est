@@ -25,8 +25,9 @@
 #ifndef P4EST_MODEL_H
 #define P4EST_MODEL_H
 
-#include <p4est.h>
-#include <p4est_geometry.h>
+#include <p4est_to_p8est.h>
+#include <p8est.h>
+#include <p8est_geometry.h>
 
 /** Used to free private model primitives. */
 typedef void        (*p4est_destroy_primitives_t) (void *primitives);
@@ -34,7 +35,7 @@ typedef void        (*p4est_destroy_primitives_t) (void *primitives);
 /** Check intersection of a rectangle with an object. */
 typedef int         (*p4est_intersect_t) (p4est_topidx_t which_tree,
                                           const double coord[4],
-                                          void *primitive);
+                                          void *model, void *point);
 
 /** General, application specific model data.
  * Creating the model as well as design and managing of primitives is

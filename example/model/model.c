@@ -41,6 +41,7 @@ p4est_model_intersect (p4est_t * p4est, p4est_topidx_t which_tree,
 {
   int                 result;
   double              coord[6];
+  size_t              p;
   p4est_qcoord_t      qh;
   p4est_model_t  *model = (p4est_model_t *) p4est->user_pointer;
 
@@ -50,6 +51,8 @@ p4est_model_intersect (p4est_t * p4est, p4est_topidx_t which_tree,
 
   /* retrieve object index and model */
   P4EST_ASSERT (point != NULL);
+  p = *(size_t *) point;
+  P4EST_ASSERT (p < model->num_prim);
 
   /* provide rectangle coordinates */
   qh = P4EST_QUADRANT_LEN (quadrant->level);
@@ -65,7 +68,7 @@ p4est_model_intersect (p4est_t * p4est, p4est_topidx_t which_tree,
 #endif
 
   /* execute intersection test */
-  if ((result = model->intersect (which_tree, coord, point)) &&
+  if ((result = model->intersect (which_tree, coord, model, point)) &&
       local_num >= 0) {
     /* set refinement indicator for a leaf quadrant */
     quadrant->p.user_int = 1;
